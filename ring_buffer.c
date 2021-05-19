@@ -1,302 +1,302 @@
 /**
  * \file ring_buffer.c
- * \brief 简易环形缓冲的实现
- * \details 可作为单片机串口的环形缓冲/软FIFO，提升串口数据传输能力；
- * 可以向环形缓冲区快速的储存/读取数据，并且无需手动记录数据接收量即可准确的读出所有数据；
- * 无需手动清空数据缓存区，只要将上次接收的数据读取出来，缓冲区即可准备好接收下一段数据；
- * 节省了手动清空普通缓存区的时间，能够提升串口程序的运行效率；
+ * \brief Simple ring buffer implementation
+ * \details It can be used as a ring buffer / soft FIFO of the single-chip serial port to improve the serial data transmission capacity;
+ * You can quickly store / read data to the ring buffer, and all data can be accurately read without manually recording data reception;
+ * No need to manually empty the data buffer, as long as the last received data is read, the buffer is ready to receive the next paragraph;
+ * Save time to manually empty the normal buffer area, able to enhance the operational efficiency of the serial program;
  * \author netube_99\netube@163.com
  * \date 2021.01.30
  * \version v1.3.1
  * 
- * 2021.01.19 v1.0.0 发布第一版本
- * 2021.01.24 v1.1.0 增加匹配字符查找函数
- * 2021.01.27 v1.2.0 重制匹配字符查找功能，现已支持8位到32位关键词查询
- * 2021.01.28 v1.3.0 复位函数修改为删除函数、增加关键词插入函数（自适应大小端）
- * 2021.01.30 v1.3.1 修复了String读写函数的小概率指针溢出错误
+ * 2021.01.19 v1.0.0 Release the first version
+ * 2021.01.24 v1.1.0 Add a matching function
+ * 2021.01.27 v1.2.0 Remaster matching character lookup feature, now supported 8 digits to 32-bit keyword queries
+ * 2021.01.28 v1.3.0 The reset function is modified to delete functions, add keyword insert function (adaptive size end)
+ * 2021.01.30 v1.3.1 Fixed a small probability pointer overflow error in String read and write functions
 */
 
 #include "ring_buffer.h"
 
 /**
- * \brief 初始化新缓冲区
- * \param[out] ring_buffer_handle: 待初始化的缓冲区结构体句柄
- * \param[in] buffer_addr: 外部定义的缓冲区数组，类型必须为 uint8_t
- * \param[in] buffer_size: 外部定义的缓冲区数组空间
- * \return 返回缓冲区初始化的结果
- *      \arg RING_BUFFER_SUCCESS: 初始化成功
- *      \arg RING_BUFFER_ERROR: 初始化失败
+ * \brief Initialization new buffer
+ * \param[out] ring_buffer_handle: Buffer structure handle to be initialized
+ * \param[in] buffer_addr: Array array of external definitions, type must be uint8_t
+ * \param[in] buffer_size: External defined buffer array space
+ * \return Returns the result of the buffer initialization
+ *      \arg RING_BUFFER_SUCCESS: Initialization successful
+ *      \arg RING_BUFFER_ERROR: initialization failed
 */
-uint8_t Ring_Buffer_Init(ring_buffer *ring_buffer_handle, uint8_t *buffer_addr ,uint32_t buffer_size)
+uint8_t Ring_Buffer_Init(ring_buffer *ring_buffer_handle, uint8_t *buffer_addr, uint32_t buffer_size)
 {
-    ring_buffer_handle->head = 0 ;//复位头指针
-    ring_buffer_handle->tail = 0 ;//复位尾指针
-    ring_buffer_handle->lenght = 0 ;//复位已存储数据长度
-    ring_buffer_handle->array_addr = buffer_addr ;//缓冲区储存数组基地址
-    ring_buffer_handle->max_lenght = buffer_size ;//缓冲区最大可储存数据量
-    if(ring_buffer_handle->max_lenght < 2)//缓冲区数组必须有两个元素以上
-        return RING_BUFFER_ERROR ;//缓冲区数组过小，队列初始化失败
+    ring_buffer_handle->head = 0;                 //Reset head pointer
+    ring_buffer_handle->tail = 0;                 //Reset tail pointer
+    ring_buffer_handle->lenght = 0;               //Reset has stored data length
+    ring_buffer_handle->array_addr = buffer_addr; //Buffer storage number base address
+    ring_buffer_handle->max_length = buffer_size; //Buffer maximum storage data amount
+    if (ring_buffer_handle->max_length < 2)       //Buffer arrays must have two elements or more
+        return RING_BUFFER_ERROR;                 //The buffer array is too small, the queue initialization failed
     else
-        return RING_BUFFER_SUCCESS ;//缓冲区初始化成功
+        return RING_BUFFER_SUCCESS; //Buffer initialization success
 }
 
 /**
- * \brief 从头指针开始删除指定长度的数据
- * \param[out] ring_buffer_handle: 缓冲区结构体句柄
- * \param[in] lenght: 要删除的长度
- * \return 返回删除指定长度数据结果
- *      \arg RING_BUFFER_SUCCESS: 删除成功
- *      \arg RING_BUFFER_ERROR: 删除失败
+ * \brief Delete data from the head pointer to the specified length
+ * \param[out] ring_buffer_handle: Buffer structure
+ * \param[in] lenght: To delete the length
+ * \return Return to delete the specified length data result
+ *      \arg RING_BUFFER_SUCCESS: successfully deleted
+ *      \arg RING_BUFFER_ERROR: failed to delete
 */
 uint8_t Ring_Buffer_Delete(ring_buffer *ring_buffer_handle, uint8_t lenght)
 {
-    if(ring_buffer_handle->lenght < lenght)
-        return RING_BUFFER_ERROR ;//已储存的数据量小于需删除的数据量
+    if (ring_buffer_handle->lenght < lenght)
+        return RING_BUFFER_ERROR; //The amount of data that has been stored is less than the amount of data that needs to be deleted.
     else
     {
-        if((ring_buffer_handle->head + lenght) >= ring_buffer_handle->max_lenght)
-            ring_buffer_handle->head = lenght - (ring_buffer_handle->max_lenght - ring_buffer_handle->head);
+        if ((ring_buffer_handle->head + lenght) >= ring_buffer_handle->max_length)
+            ring_buffer_handle->head = lenght - (ring_buffer_handle->max_length - ring_buffer_handle->head);
         else
-            ring_buffer_handle->head += lenght ;//头指针向前推进，抛弃数据
-        ring_buffer_handle->lenght -= lenght ;//重新记录有效数据长度
-        return RING_BUFFER_SUCCESS ;//已储存的数据量小于需删除的数据量
+            ring_buffer_handle->head += lenght; //Head pointer advances forward, abandon data
+        ring_buffer_handle->lenght -= lenght;   //Record the valid data length
+        return RING_BUFFER_SUCCESS;             //The amount of data that has been stored is less than the amount of data that needs to be deleted.
     }
 }
 
 /**
- * \brief 向缓冲区尾部写一个字节
- * \param[out] ring_buffer_handle: 缓冲区结构体句柄
- * \param[in] data: 要写入的字节
- * \return 返回缓冲区写字节的结果
- *      \arg RING_BUFFER_SUCCESS: 写入成功
- *      \arg RING_BUFFER_ERROR: 写入失败
+ * \brief Write one byte to the end of the buffer
+ * \param[out] ring_buffer_handle: Buffer structure
+ * \param[in] data: To write bytes
+ * \return Returns the result of the buffer write byte
+ *      \arg RING_BUFFER_SUCCESS: Write success
+ *      \arg RING_BUFFER_ERROR: Write failure
 */
-uint8_t Ring_Buffer_Write_Byte(ring_buffer *ring_buffer_handle, uint8_t data)
+uint8_t Ring_Buffer_Write_Byte(ring_buffer *ring_buffer_handle, uint8_t rb_data)
 {
-    //缓冲区数组已满，产生覆盖错误
-    if(ring_buffer_handle->lenght == (ring_buffer_handle->max_lenght - 1))
-        return RING_BUFFER_ERROR ;
+    //The array of buffers is full, resulting in an overlay error
+    if (ring_buffer_handle->lenght == (ring_buffer_handle->max_length - 1))
+        return RING_BUFFER_ERROR;
     else
     {
-        *(ring_buffer_handle->array_addr + ring_buffer_handle->tail) = data;//基地址+偏移量，存放数据
-        ring_buffer_handle->lenght ++ ;//数据量计数+1
-        ring_buffer_handle->tail ++ ;//尾指针后移
+        *(ring_buffer_handle->array_addr + ring_buffer_handle->tail) = rb_data; //Base site + offset, storage data
+        ring_buffer_handle->lenght++;                                           //Data quantity count +1
+        ring_buffer_handle->tail++;                                             //Tail pointing
     }
-    //如果尾指针超越了数组末尾，尾指针指向缓冲区数组开头，形成闭环
-    if(ring_buffer_handle->tail > (ring_buffer_handle->max_lenght - 1))
-        ring_buffer_handle->tail = 0 ;
-	return RING_BUFFER_SUCCESS ;
+    //If the tail pointer beyond the end of the array, the tail pointer points to the beginning of the buffer array, forming a closed loop.
+    if (ring_buffer_handle->tail > (ring_buffer_handle->max_length - 1))
+        ring_buffer_handle->tail = 0;
+    return RING_BUFFER_SUCCESS;
 }
 
 /**
- * \brief 从缓冲区头指针读取一个字节
- * \param[in] ring_buffer_handle: 缓冲区结构体句柄
- * \return 返回读取的字节
+ * \brief Read a byte from the buffer head pointer
+ * \param[in] ring_buffer_handle: Buffer structure
+ * \return Returns the read byte
 */
 uint8_t Ring_Buffer_Read_Byte(ring_buffer *ring_buffer_handle)
 {
-    uint8_t data ;
-    if (ring_buffer_handle->lenght != 0)//有数据未读出
+    uint8_t rb_data;
+    if (ring_buffer_handle->lenght != 0) //Data is not read
     {
-        data = *(ring_buffer_handle->array_addr + ring_buffer_handle->head);//读取数据
-        ring_buffer_handle->head ++ ;
-        ring_buffer_handle->lenght -- ;//数据量计数-1
-        //如果头指针超越了数组末尾，头指针指向数组开头，形成闭环
-        if(ring_buffer_handle->head > (ring_buffer_handle->max_lenght - 1))
-            ring_buffer_handle->head = 0 ;
+        rb_data = *(ring_buffer_handle->array_addr + ring_buffer_handle->head); //Read data
+        ring_buffer_handle->head++;
+        ring_buffer_handle->lenght--; //Data quantity count -1
+        //If the head pointer exceeds the end of the array, the head pointer points to the beginning of the array, forming a closed loop.
+        if (ring_buffer_handle->head > (ring_buffer_handle->max_length - 1))
+            ring_buffer_handle->head = 0;
     }
-    return data ;
+    return rb_data;
 }
 
 /**
- * \brief 向缓冲区尾部写指定长度的数据
- * \param[out] ring_buffer_handle: 缓冲区结构体句柄
- * \param[out] input_addr: 待写入数据的基地址
- * \param[in] write_lenght: 要写入的字节数
- * \return 返回缓冲区尾部写指定长度字节的结果
- *      \arg RING_BUFFER_SUCCESS: 写入成功
- *      \arg RING_BUFFER_ERROR: 写入失败
+ * \brief Write the data of the specified length to the tail of the buffer
+ * \param[out] ring_buffer_handle: Buffer structure
+ * \param[out] input_addr: Base site to be written to
+ * \param[in] write_lenght: Number of bytes to be written
+ * \return Returns the result of the end of the buffer to write the specified length byte
+ *      \arg RING_BUFFER_SUCCESS: Write success
+ *      \arg RING_BUFFER_ERROR: Write failure
 */
 uint8_t Ring_Buffer_Write_String(ring_buffer *ring_buffer_handle, void *input_addr, uint32_t write_lenght)
 {
-    //如果不够存储空间存放新数据,返回错误
-    if((ring_buffer_handle->lenght + write_lenght) > (ring_buffer_handle->max_lenght))
-        return RING_BUFFER_ERROR ;
+    //If you are not enough to store new data, return an error
+    if ((ring_buffer_handle->lenght + write_lenght) > (ring_buffer_handle->max_length))
+        return RING_BUFFER_ERROR;
     else
     {
-        //设置两次写入长度
-        uint32_t write_size_a, write_size_b ;
-        //如果顺序可用长度小于需写入的长度，需要将数据拆成两次分别写入
-        if((ring_buffer_handle->max_lenght - ring_buffer_handle->tail) < write_lenght)
+        //Set two write lengths
+        uint32_t write_size_a, write_size_b;
+        //If the order can be used in length than the length of the write, it is necessary to write data twice.
+        if ((ring_buffer_handle->max_length - ring_buffer_handle->tail) < write_lenght)
         {
-            write_size_a = ring_buffer_handle->max_lenght - ring_buffer_handle->tail ;//从尾指针开始写到储存数组末尾
-            write_size_b = write_lenght - write_size_a ;//从储存数组开头写数据
+            write_size_a = ring_buffer_handle->max_length - ring_buffer_handle->tail; //Write from the tail pointer to the end of the store
+            write_size_b = write_lenght - write_size_a;                               //Write data from the start of the array
         }
-        else//如果顺序可用长度大于或等于需写入的长度，则只需要写入一次
+        else //If the order can be used for a length greater than or equal to the length of the need to write, it only needs to be written once.
         {
-            write_size_a = write_lenght ;//从尾指针开始写到储存数组末尾
-            write_size_b = 0 ;//无需从储存数组开头写数据
+            write_size_a = write_lenght; //Write from the tail pointer to the end of the store
+            write_size_b = 0;            //No need to write data from the beginning of the store
         }
-        //开始写入数据
-        if(write_size_b != 0)//需要写入两次
+        //Start writing data
+        if (write_size_b != 0) //Need to write twice
         {
-            //分别拷贝a、b段数据到储存数组中
+            //Copy A, B data to the storage array, respectively
             memcpy(ring_buffer_handle->array_addr + ring_buffer_handle->tail, input_addr, write_size_a);
-            memcpy(ring_buffer_handle->array_addr, input_addr + write_size_a , write_size_b);
-            ring_buffer_handle->lenght += write_lenght ;//记录新存储了多少数据量
-            ring_buffer_handle->tail = write_size_b ;//重新定位尾指针位置
+            memcpy(ring_buffer_handle->array_addr, input_addr + write_size_a, write_size_b);
+            ring_buffer_handle->lenght += write_lenght; //How much data is recorded
+            ring_buffer_handle->tail = write_size_b;    //Repositioning the tail pointer position
         }
-        else//只需写入一次
+        else //只需写入一次
         {
             memcpy(ring_buffer_handle->array_addr + ring_buffer_handle->tail, input_addr, write_size_a);
-            ring_buffer_handle->lenght += write_lenght ;//记录新存储了多少数据量
-            ring_buffer_handle->tail += write_size_a ;//重新定位尾指针位置
-            if(ring_buffer_handle->tail == ring_buffer_handle->max_lenght)
-                ring_buffer_handle->tail = 0 ;//如果写入数据后尾指针刚好写到数组尾部，则回到开头，防止越位
+            ring_buffer_handle->lenght += write_lenght; //How much data is recorded
+            ring_buffer_handle->tail += write_size_a;   //Repositioning the tail pointer position
+            if (ring_buffer_handle->tail == ring_buffer_handle->max_length)
+                ring_buffer_handle->tail = 0; //If the write data is written, it is just written to the end of the array, it will return to the beginning and prevent the offside.
         }
-        return RING_BUFFER_SUCCESS ;
+        return RING_BUFFER_SUCCESS;
     }
 }
 
 /**
- * \brief 向缓冲区头部读指定长度的数据，保存到指定的地址
- * \param[in] ring_buffer_handle: 缓冲区结构体句柄
- * \param[out] output_addr: 读取的数据保存地址
- * \param[in] read_lenght: 要读取的字节数
- * \return 返回缓冲区头部读指定长度字节的结果
- *      \arg RING_BUFFER_SUCCESS: 读取成功
- *      \arg RING_BUFFER_ERROR: 读取失败
+ * \brief Read the data of the specified length to the buffer header, save to the specified address
+ * \param[in] ring_buffer_handle: Buffer structure
+ * \param[out] output_addr: Read data saved address
+ * \param[in] read_lenght: Number of bytes to read
+ * \return Returns the result of the buffer header read the specified length byte
+ *      \arg RING_BUFFER_SUCCESS: Read success
+ *      \arg RING_BUFFER_ERROR: Read failure
 */
 uint8_t Ring_Buffer_Read_String(ring_buffer *ring_buffer_handle, uint8_t *output_addr, uint32_t read_lenght)
 {
-    if(read_lenght > ring_buffer_handle->lenght)
-        return RING_BUFFER_ERROR ;
+    if (read_lenght > ring_buffer_handle->lenght)
+        return RING_BUFFER_ERROR;
     else
     {
-        uint32_t Read_size_a, Read_size_b ;
-        if(read_lenght > (ring_buffer_handle->max_lenght - ring_buffer_handle->head))
+        uint32_t Read_size_a, Read_size_b;
+        if (read_lenght > (ring_buffer_handle->max_length - ring_buffer_handle->head))
         {
-            Read_size_a = ring_buffer_handle->max_lenght - ring_buffer_handle->head ;
-            Read_size_b = read_lenght - Read_size_a ;
+            Read_size_a = ring_buffer_handle->max_length - ring_buffer_handle->head;
+            Read_size_b = read_lenght - Read_size_a;
         }
         else
         {
-            Read_size_a = read_lenght ;
-            Read_size_b = 0 ;
+            Read_size_a = read_lenght;
+            Read_size_b = 0;
         }
-        if(Read_size_b != 0)//需要读取两次
+        if (Read_size_b != 0) //Need to read twice
         {
             memcpy(output_addr, ring_buffer_handle->array_addr + ring_buffer_handle->head, Read_size_a);
             memcpy(output_addr + Read_size_a, ring_buffer_handle->array_addr, Read_size_b);
-            ring_buffer_handle->lenght -= read_lenght ;//记录剩余数据量
-            ring_buffer_handle->head = Read_size_b ;//重新定位头指针位置
+            ring_buffer_handle->lenght -= read_lenght; //Record the amount of remaining data
+            ring_buffer_handle->head = Read_size_b;    //Repositioning head pointer position
         }
         else
         {
             memcpy(output_addr, ring_buffer_handle->array_addr + ring_buffer_handle->head, Read_size_a);
-            ring_buffer_handle->lenght -= read_lenght ;//记录剩余数据量
-            ring_buffer_handle->head += Read_size_a ;//重新定位头指针位置
-            if(ring_buffer_handle->head == ring_buffer_handle->max_lenght)
-                ring_buffer_handle->head = 0 ;//如果读取数据后头指针刚好写到数组尾部，则回到开头，防止越位
+            ring_buffer_handle->lenght -= read_lenght; //Record the amount of remaining data
+            ring_buffer_handle->head += Read_size_a;   //Repositioning head pointer position
+            if (ring_buffer_handle->head == ring_buffer_handle->max_length)
+                ring_buffer_handle->head = 0; //If the head pointer is just written to the end of the array, it will return to the beginning to prevent the offside.
         }
-        return RING_BUFFER_SUCCESS ;
+        return RING_BUFFER_SUCCESS;
     }
 }
 
 /**
- * \brief 环形缓冲区插入关键词
- * \param[in] ring_buffer_handle: 缓冲区结构体句柄
- * \param[in] keyword: 要插入的关键词
- * \param[in] keyword_lenght:关键词字节数，最大4字节（32位）
- * \return 返回插入关键词的结果
- *      \arg RING_BUFFER_SUCCESS: 插入成功
- *      \arg RING_BUFFER_ERROR: 插入失败
+ * \brief Ring buffer insert keyword
+ * \param[in] ring_buffer_handle: Buffer structure
+ * \param[in] keyword: Keywords to insert
+ * \param[in] keyword_lenght:Key words texture, maximum 4 bytes (32-bit)
+ * \return Return the result of the keyword
+ *      \arg RING_BUFFER_SUCCESS: Insert success
+ *      \arg RING_BUFFER_ERROR: Insert failure
 */
 uint8_t Ring_Buffer_Insert_Keyword(ring_buffer *ring_buffer_handle, uint32_t keyword, uint8_t keyword_lenght)
 {
     uint8_t *keyword_addr = (uint8_t *)&keyword;
     uint8_t keyword_byte[4];
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    //小端模式字节序排列
-    keyword_byte[0] = *(keyword_addr + 3) ;
-    keyword_byte[1] = *(keyword_addr + 2) ;
-    keyword_byte[2] = *(keyword_addr + 1) ;
-    keyword_byte[3] = *(keyword_addr + 0) ;
-    //将关键词填入环形缓冲区
+    //Small-end mode word sequence arrangement
+    keyword_byte[0] = *(keyword_addr + 3);
+    keyword_byte[1] = *(keyword_addr + 2);
+    keyword_byte[2] = *(keyword_addr + 1);
+    keyword_byte[3] = *(keyword_addr + 0);
+    //Fill keywords in ring buffer
     return Ring_Buffer_Write_String(ring_buffer_handle, keyword_byte, keyword_lenght);
 #else
-    //大端模式字节序排列
-    keyword_byte[0] = *(keyword_addr + 0) ;
-    keyword_byte[1] = *(keyword_addr + 1) ;
-    keyword_byte[2] = *(keyword_addr + 2) ;
-    keyword_byte[3] = *(keyword_addr + 3) ;
-    //将关键词填入环形缓冲区
+    //Large end mode word sequence arrangement
+    keyword_byte[0] = *(keyword_addr + 0);
+    keyword_byte[1] = *(keyword_addr + 1);
+    keyword_byte[2] = *(keyword_addr + 2);
+    keyword_byte[3] = *(keyword_addr + 3);
+    //Fill keywords in ring buffer
     return Ring_Buffer_Write_String(ring_buffer_handle, keyword_byte + (keyword_lenght - 1), keyword_lenght);
 #endif
 }
 
 /**
- * \brief 从头指针开始查找最近的匹配关键词
- * \param[in] ring_buffer_handle: 缓冲区结构体句柄
- * \param[in] keyword: 要查找的关键词
- * \param[in] keyword_lenght:关键词字节数，最大4字节（32位）
- * \return 返回获取匹配字符最高位需要读取的字节数，返回 0/RING_BUFFER_ERROR: 则查找失败
+ * \brief Start searching for the nearest matching keyword from the head pointer
+ * \param[in] ring_buffer_handle: Buffer structure
+ * \param[in] keyword: Keywords to find
+ * \param[in] keyword_lenght:Key words texture, maximum 4 bytes (32-bit)
+ * \return Returns the number of bytes that you need to read, return 0 / RING_BUFFER_ERROR: Find failed
 */
 uint32_t Ring_Buffer_Find_Keyword(ring_buffer *ring_buffer_handle, uint32_t keyword, uint8_t keyword_lenght)
 {
-    uint32_t max_find_lenght = ring_buffer_handle->lenght - keyword_lenght + 1 ;//计算需要搜索的最大长度
-    uint8_t trigger_word = keyword >> ((keyword_lenght - 1) * 8) ;//计算触发关键词检查的字节（最高位）
-    uint32_t distance = 1 , find_head = ring_buffer_handle->head;//记录关键词距离头指针的长度/临时头指针获取原头指针初始值
-    while(distance <= max_find_lenght)//在设定范围内搜索关键词（防止指针越位错误）
+    uint32_t max_find_lenght = ring_buffer_handle->lenght - keyword_lenght + 1; //Calculate the maximum length that needs to be searched
+    uint8_t trigger_word = keyword >> ((keyword_lenght - 1) * 8);               //Calculate bytes (highest) to trigger keyword check
+    uint32_t distance = 1, find_head = ring_buffer_handle->head;                //Record keyword distance head pointer length / temporary head pointer gets the original pointer initial value
+    while (distance <= max_find_lenght)                                         //Search for keywords within the setting range (prevent pointer offside errors)
     {
-        if(*(ring_buffer_handle->array_addr + find_head) == trigger_word)//如果高位字节匹配则开始向低位检查
-            if(Ring_Buffer_Get_Word(ring_buffer_handle, find_head, keyword_lenght) == keyword)//满足关键词匹配
-                return distance ;//返回长度，使用 Ring_Buffer_Read_String 可提取数据
-        find_head ++ ;//当前字符不匹配，临时头指针后移，检查下一个
-        distance ++ ;//长度也要随着搜索进度后移
-        if(find_head > (ring_buffer_handle->max_lenght - 1))
-            find_head = 0 ;//如果到了数组尾部，则返回数组开头（环形缓冲的特性）
+        if (*(ring_buffer_handle->array_addr + find_head) == trigger_word)                      //If the high byte match begins to check to the low position
+            if (Ring_Buffer_Get_Word(ring_buffer_handle, find_head, keyword_lenght) == keyword) //Meet keyword match
+                return distance;                                                                //Return the length, use Ring_Buffer_Read_String to extract data
+        find_head++;                                                                            //The current character does not match, the temporary head pointer is moved, check the next one
+        distance++;                                                                             //The length also has to move after search
+        if (find_head > (ring_buffer_handle->max_length - 1))
+            find_head = 0; //If you go to the end of the array, return the beginning of the array (ring buffering characteristics)
     }
-    return RING_BUFFER_ERROR ;//咩都某搵到
+    return RING_BUFFER_ERROR; //I found it
 }
 
 /**
- * \brief 从指定头指针地址获取完整长度的关键词（私有函数，无指针越位保护）
- * \param[in] ring_buffer_handle: 缓冲区结构体句柄
- * \param[in] head: 头指针偏移量（匹配字符所在地址）
- * \param[in] read_lenght:关键词字节数，最大4字节（32位）
- * \return 返回完整的关键词
+ * \brief Get the full length of the full length from the specified head pointer address (private function, no pointer-proof protection)
+ * \param[in] ring_buffer_handle: Buffer structure
+ * \param[in] head: Head pointer offset (the address of the matching characters)
+ * \param[in] read_lenght:Key words texture, maximum 4 bytes (32-bit)
+ * \return Return complete keyword
 */
 static uint32_t Ring_Buffer_Get_Word(ring_buffer *ring_buffer_handle, uint32_t head, uint32_t read_lenght)
 {
-    uint32_t data = 0, i ;
-    for(i=1; i<=read_lenght; i++)//按照关键词的长度（字符数）向后提取数据
+    uint32_t rb_data = 0, i;
+    for (i = 1; i <= read_lenght; i++) //Extract data backwards according to the length of keyword (number of characters)
     {
-        //从最高位到最低位，整合成一个32位数据
-        data |= *(ring_buffer_handle->array_addr + head) << (8*(read_lenght - i)) ;
-        head ++ ;
-        if(head > (ring_buffer_handle->max_lenght - 1))
-            head = 0 ;//如果到了数组尾部，则返回数组开头（环形缓冲的特性）
+        //From the highest bit to the lowest position, integrate into a 32-bit data
+        rb_data |= *(ring_buffer_handle->array_addr + head) << (8 * (read_lenght - i));
+        head++;
+        if (head > (ring_buffer_handle->max_length - 1))
+            head = 0; //If you go to the end of the array, return the beginning of the array (ring buffering characteristics)
     }
-    return data ;//返回移位整合后的32位数据
+    return rb_data; //Returns 32-bit data after shifting integration
 }
 
 /**
- * \brief 获取缓冲区里已储存的数据长度
- * \param[in] ring_buffer_handle: 缓冲区结构体句柄
- * \return 返回缓冲区里已储存的数据长度
+ * \brief Get the data length that has been stored in the buffer
+ * \param[in] ring_buffer_handle: Buffer structure
+ * \return Returns the amount of data already stored in the buffer
 */
-uint32_t Ring_Buffer_Get_Lenght(ring_buffer *ring_buffer_handle)
+uint32_t Ring_Buffer_Get_Length(ring_buffer *ring_buffer_handle)
 {
-    return ring_buffer_handle->lenght ;
+    return ring_buffer_handle->lenght;
 }
 
 /**
- * \brief 获取缓冲区可用储存空间
- * \param[in] ring_buffer_handle: 缓冲区结构体句柄
- * \return 返回缓冲区可用储存空间
+ * \brief Get a buffer available storage space
+ * \param[in] ring_buffer_handle: Buffer structure
+ * \return Return to buffer available storage space
 */
 uint32_t Ring_Buffer_Get_FreeSize(ring_buffer *ring_buffer_handle)
 {
-    return (ring_buffer_handle->max_lenght - ring_buffer_handle->lenght) ;
+    return (ring_buffer_handle->max_length - ring_buffer_handle->lenght);
 }
